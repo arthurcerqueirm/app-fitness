@@ -297,7 +297,7 @@ export function WorkoutEditorComponent({ templateId }: { templateId: string }) {
                             <Trash2 className="w-4 h-4" style={{ color: "#FF4757" }} />
                           </button>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-4 gap-2">
                           <div>
                             <label className="text-[10px] mb-1 block" style={{ color: "#6B6B80" }}>SÉRIES</label>
                             <input
@@ -314,6 +314,17 @@ export function WorkoutEditorComponent({ templateId }: { templateId: string }) {
                               value={te.target_reps}
                               onChange={(e) => updateExercise(idx, "target_reps", e.target.value)}
                               placeholder="12"
+                              className="input-field text-center text-sm"
+                              style={{ padding: "8px" }}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] mb-1 block" style={{ color: "#6B6B80" }}>PESO (kg)</label>
+                            <input
+                              type="number"
+                              value={te.target_weight || ""}
+                              onChange={(e) => updateExercise(idx, "target_weight", e.target.value ? parseFloat(e.target.value) : null)}
+                              placeholder="-"
                               className="input-field text-center text-sm"
                               style={{ padding: "8px" }}
                             />

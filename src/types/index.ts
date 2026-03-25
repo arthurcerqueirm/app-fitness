@@ -102,6 +102,7 @@ export interface ActiveSet {
 }
 
 export interface ActiveExercise {
+  templateExerciseId?: string;
   exerciseId: string;
   name: string;
   muscleGroup: string;

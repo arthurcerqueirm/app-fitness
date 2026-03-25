@@ -285,6 +285,7 @@ function ActiveWorkoutContent() {
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((te) => ({
         exerciseId: te.exercise.id,
+        templateExerciseId: te.id,
         name: te.exercise.name,
         muscleGroup: te.exercise.muscle_group,
         equipment: te.exercise.equipment,
@@ -393,6 +394,27 @@ function ActiveWorkoutContent() {
       );
       if (setInserts.length > 0) {
         await supabase.from("workout_sets").insert(setInserts);
+      }
+
+      // Update target_weights in the template if applicable
+      if (templateId) {
+        for (const exercise of exercises) {
+          if (!exercise.templateExerciseId) continue;
+          
+          const weights = exercise.sets
+            .filter(s => s.completed && s.weight)
+            .map(s => parseFloat(s.weight))
+            .filter(w => !isNaN(w));
+            
+          if (weights.length > 0) {
+            const maxWeightUsed = Math.max(...weights);
+            
+            await supabase
+              .from("template_exercises")
+              .update({ target_weight: maxWeightUsed })
+              .eq("id", exercise.templateExerciseId);
+          }
+        }
       }
 
       await supabase.from("profiles").update({
