@@ -8,7 +8,7 @@ import { useUserStore } from "@/store/userStore";
 import { useWorkoutStore } from "@/store/workoutStore";
 import {
   X, Check, Plus, Minus, ChevronLeft, ChevronRight, Clock, Zap,
-  Flame, Trophy, SkipForward, Timer, Star
+  Flame, Trophy, SkipForward, Timer, Star, Dumbbell, Play
 } from "lucide-react";
 import { formatTimer, haptic, calculate1RM, formatVolume } from "@/lib/utils";
 import { MUSCLE_GROUP_COLORS, MUSCLE_GROUP_LABELS } from "@/types";
@@ -402,6 +402,9 @@ function ActiveWorkoutContent() {
   const [elapsed, setElapsed] = useState(0);
   const [moodBeforeState, setMoodBeforeState] = useState<number | null>(null);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [pickerTemplates, setPickerTemplates] = useState<{ id: string; name: string; color: string; estimated_duration?: number; exercise_count?: number }[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -437,16 +440,40 @@ function ActiveWorkoutContent() {
     }
   }, [restTimerActive]);
 
-  // Init workout if coming with templateId
+  // Init workout if coming with templateId, otherwise show picker
   useEffect(() => {
-    if (!isActive && templateId) {
+    if (isActive) return;
+    if (templateId) {
       initWorkout(templateId);
-    } else if (!isActive && !templateId) {
-      setShowMoodPicker(true);
+    } else {
+      loadPickerTemplates();
     }
   }, []);
 
+  async function loadPickerTemplates() {
+    if (!profile) { setShowTemplatePicker(true); return; }
+    setPickerLoading(true);
+    setShowTemplatePicker(true);
+    const { data } = await supabase
+      .from("workout_templates")
+      .select("id, name, color, estimated_duration, template_exercises(count)")
+      .eq("user_id", profile.id)
+      .eq("is_active", true)
+      .order("sort_order");
+    setPickerTemplates(
+      (data ?? []).map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        color: t.color ?? "#BEFF00",
+        estimated_duration: t.estimated_duration,
+        exercise_count: t.template_exercises?.[0]?.count ?? 0,
+      }))
+    );
+    setPickerLoading(false);
+  }
+
   async function initWorkout(tid: string) {
+    if (!profile) { toast.error("Perfil não carregado, tente novamente"); return; }
     setLoading(true);
     const { data } = await supabase
       .from("workout_templates")
@@ -454,7 +481,7 @@ function ActiveWorkoutContent() {
       .eq("id", tid)
       .single();
 
-    if (!data) { setLoading(false); return; }
+    if (!data) { setLoading(false); toast.error("Treino não encontrado"); return; }
 
     const exerciseList: ActiveExercise[] = (data.template_exercises as any[])
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -485,7 +512,7 @@ function ActiveWorkoutContent() {
     const { data: session } = await supabase
       .from("workout_sessions")
       .insert({
-        user_id: profile!.id,
+        user_id: profile.id,
         template_id: tid,
         name: data.name,
         is_completed: false,
@@ -506,10 +533,11 @@ function ActiveWorkoutContent() {
   }
 
   async function startFreeWorkout() {
+    if (!profile) { toast.error("Perfil não carregado, tente novamente"); return; }
     const { data: session } = await supabase
       .from("workout_sessions")
       .insert({
-        user_id: profile!.id,
+        user_id: profile.id,
         template_id: null,
         name: "Treino Livre",
         is_completed: false,
@@ -627,50 +655,145 @@ function ActiveWorkoutContent() {
     );
   }
 
-  // Mood picker (free workout)
-  if (showMoodPicker) {
+  // Template picker
+  if (showTemplatePicker) {
     const MOODS = ["😫", "😕", "😐", "😊", "🔥"];
     return (
-      <div className="min-h-dvh flex flex-col items-center justify-center px-5" style={{ background: "#0A0A0F" }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
-          <h2 className="text-2xl font-black mb-2 text-center" style={{ color: "#FAFAFA" }}>Como está se sentindo?</h2>
-          <p className="text-sm text-center mb-8" style={{ color: "#6B6B80" }}>Antes de começar o treino</p>
-          <div className="flex gap-3 justify-center mb-8">
-            {MOODS.map((emoji, i) => (
-              <motion.button
-                key={i}
-                whileTap={{ scale: 0.85 }}
-                onClick={() => setMoodBeforeState(i + 1)}
-                className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl transition-all"
-                style={{
-                  background: moodBeforeState === i + 1 ? "rgba(190,255,0,0.15)" : "rgba(255,255,255,0.04)",
-                  border: moodBeforeState === i + 1 ? "2px solid rgba(190,255,0,0.4)" : "2px solid transparent",
-                  transform: moodBeforeState === i + 1 ? "scale(1.15)" : "scale(1)",
-                }}
-              >
-                {emoji}
-              </motion.button>
-            ))}
+      <div className="min-h-dvh flex flex-col" style={{ background: "#0A0A0F" }}>
+        <div className="px-5 pt-safe">
+          <div className="flex items-center justify-between pt-4 pb-5">
+            <h1 className="text-2xl font-black" style={{ color: "#FAFAFA" }}>Iniciar Treino</h1>
+            <button
+              onClick={() => router.push("/home")}
+              className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              <X className="w-4 h-4" style={{ color: "#6B6B80" }} />
+            </button>
           </div>
-          <motion.button whileTap={{ scale: 0.97 }} onClick={startFreeWorkout} className="btn-primary">
-            <Zap className="w-5 h-5" fill="black" />
-            Iniciar Treino Livre
-          </motion.button>
-          <button onClick={() => router.back()} className="btn-secondary mt-3">
-            Cancelar
-          </button>
-        </motion.div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 pb-8">
+          {pickerLoading ? (
+            <div className="flex flex-col gap-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: "rgba(255,255,255,0.04)" }} />
+              ))}
+            </div>
+          ) : pickerTemplates.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center py-12 gap-4 text-center"
+            >
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "rgba(190,255,0,0.1)", border: "1px solid rgba(190,255,0,0.2)" }}>
+                <Dumbbell className="w-8 h-8" style={{ color: "#BEFF00" }} />
+              </div>
+              <div>
+                <p className="font-bold mb-1" style={{ color: "#FAFAFA" }}>Nenhum treino criado</p>
+                <p className="text-sm" style={{ color: "#6B6B80" }}>Crie um treino ou inicie livre</p>
+              </div>
+              <button onClick={() => router.push("/workouts/new")} className="btn-primary" style={{ width: "auto", paddingLeft: 20, paddingRight: 20 }}>
+                <Plus className="w-4 h-4" />
+                Criar Treino
+              </button>
+            </motion.div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold mb-3" style={{ color: "#6B6B80" }}>SEUS TREINOS</p>
+              {pickerTemplates.map((t, i) => (
+                <motion.button
+                  key={t.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => { setShowTemplatePicker(false); initWorkout(t.id); }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-left"
+                  style={{ background: `${t.color}10`, border: `1px solid ${t.color}30` }}
+                >
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}22` }}>
+                    <Dumbbell className="w-5 h-5" style={{ color: t.color }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold truncate" style={{ color: "#FAFAFA" }}>{t.name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "#6B6B80" }}>
+                      {t.exercise_count} exercício{t.exercise_count !== 1 ? "s" : ""}
+                      {t.estimated_duration ? ` · ${t.estimated_duration}min` : ""}
+                    </p>
+                  </div>
+                  <Play className="w-5 h-5 flex-shrink-0" style={{ color: t.color }} fill={t.color} />
+                </motion.button>
+              ))}
+            </div>
+          )}
+
+          {/* Free workout divider */}
+          <div className="flex items-center gap-3 my-6">
+            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+            <span className="text-xs" style={{ color: "#6B6B80" }}>ou</span>
+            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+          </div>
+
+          {/* Free workout section */}
+          {!showMoodPicker ? (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowMoodPicker(true)}
+              className="w-full flex items-center gap-4 p-4 rounded-2xl"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(190,255,0,0.1)" }}>
+                <Zap className="w-5 h-5" style={{ color: "#BEFF00" }} />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-bold" style={{ color: "#FAFAFA" }}>Treino Livre</p>
+                <p className="text-xs mt-0.5" style={{ color: "#6B6B80" }}>Sem template, adicione exercícios</p>
+              </div>
+              <ChevronRight className="w-4 h-4" style={{ color: "#6B6B80" }} />
+            </motion.button>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-card p-5"
+            >
+              <p className="font-bold mb-1" style={{ color: "#FAFAFA" }}>Como está se sentindo?</p>
+              <p className="text-xs mb-4" style={{ color: "#6B6B80" }}>Antes de começar o treino</p>
+              <div className="flex gap-2 justify-center mb-5">
+                {["😫", "😕", "😐", "😊", "🔥"].map((emoji, i) => (
+                  <motion.button
+                    key={i}
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => setMoodBeforeState(i + 1)}
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
+                    style={{
+                      background: moodBeforeState === i + 1 ? "rgba(190,255,0,0.15)" : "rgba(255,255,255,0.04)",
+                      border: moodBeforeState === i + 1 ? "2px solid rgba(190,255,0,0.4)" : "2px solid transparent",
+                    }}
+                  >
+                    {emoji}
+                  </motion.button>
+                ))}
+              </div>
+              <motion.button whileTap={{ scale: 0.97 }} onClick={startFreeWorkout} className="btn-primary">
+                <Zap className="w-5 h-5" fill="black" />
+                Iniciar Treino Livre
+              </motion.button>
+            </motion.div>
+          )}
+        </div>
       </div>
     );
   }
 
-  // No active workout
+  // No active workout fallback
   if (!isActive || !currentExercise) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center px-5" style={{ background: "#0A0A0F" }}>
         <p style={{ color: "#6B6B80" }}>Nenhum treino ativo</p>
-        <button onClick={() => router.push("/workouts")} className="btn-primary mt-4">
-          Escolher Treino
+        <button onClick={() => router.push("/home")} className="btn-primary mt-4">
+          Voltar
         </button>
       </div>
     );
