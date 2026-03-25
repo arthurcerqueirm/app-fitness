@@ -21,7 +21,7 @@ import type { WorkoutTemplate, WorkoutSession } from "@/types";
 
 export default function HomePage() {
   const router = useRouter();
-  const { profile } = useUserStore();
+  const { profile, isLoading: authLoading } = useUserStore();
   const { isActive } = useWorkoutStore();
 
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
@@ -32,12 +32,13 @@ export default function HomePage() {
   const today = getTodayDayOfWeek();
 
   useEffect(() => {
+    if (authLoading) return;
     if (!profile) {
       router.push("/login");
       return;
     }
     loadData();
-  }, [profile]);
+  }, [profile, authLoading]);
 
   useEffect(() => {
     if (isActive) router.push("/active");
