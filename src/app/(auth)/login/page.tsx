@@ -21,7 +21,12 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (mode === "magic") {
-        const { error } = await supabase.auth.signInWithOtp({ email });
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
         if (error) throw error;
         toast.success("Link enviado! Verifique seu email.", { duration: 5000 });
       } else {
@@ -32,7 +37,7 @@ export default function LoginPage() {
           .from("profiles")
           .select("id")
           .eq("id", data.user.id)
-          .single();
+          .maybeSingle();
         if (!profile) {
           router.push("/onboarding");
         } else {

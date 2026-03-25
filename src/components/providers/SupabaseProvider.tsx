@@ -57,7 +57,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         .from("profiles")
         .select("*")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
       setProfile(data as Profile | null);
     } finally {
       setLoading(false);

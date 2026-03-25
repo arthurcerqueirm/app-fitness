@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
+import { useSupabase } from "@/components/providers/SupabaseProvider";
 import { useUserStore } from "@/store/userStore";
 import { useWorkoutStore } from "@/store/workoutStore";
 import { StatCard } from "@/components/ui/StatCard";
@@ -22,6 +23,7 @@ import type { WorkoutTemplate, WorkoutSession } from "@/types";
 export default function HomePage() {
   const router = useRouter();
   const { profile, isLoading: authLoading } = useUserStore();
+  const { session, isLoading: sessionLoading } = useSupabase();
   const { isActive } = useWorkoutStore();
 
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
@@ -32,13 +34,18 @@ export default function HomePage() {
   const today = getTodayDayOfWeek();
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!profile) {
+    if (authLoading || sessionLoading) return;
+    if (!session) {
       router.push("/login");
       return;
     }
+    if (!profile) {
+      router.push("/onboarding");
+      return;
+    }
     loadData();
-  }, [profile, authLoading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, session, authLoading, sessionLoading]);
 
   useEffect(() => {
     if (isActive) router.push("/active");

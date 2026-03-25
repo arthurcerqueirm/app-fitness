@@ -20,26 +20,39 @@ function ConfirmContent() {
     const next = searchParams.get("next") ?? "/home";
 
     async function exchange() {
+      // If there's a code param, exchange it for a session
       if (code) {
-        await supabase.auth.exchangeCodeForSession(code);
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error("Error exchanging code for session:", error);
+          router.replace("/login");
+          return;
+        }
+      }
+
+      // Wait a tick to let detectSessionInUrl do its work for hash-based tokens
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Check if we now have a valid session
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        router.replace("/login");
+        return;
       }
 
       // Check if user has a profile — if not, send to onboarding
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("id", session.user.id)
-          .single();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", session.user.id)
+        .maybeSingle();
 
-        router.replace(profile ? next : "/onboarding");
-      } else {
-        router.replace("/login");
-      }
+      router.replace(profile ? next : "/onboarding");
     }
 
     exchange();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
